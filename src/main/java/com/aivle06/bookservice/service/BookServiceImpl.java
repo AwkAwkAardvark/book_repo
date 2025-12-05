@@ -5,10 +5,12 @@ import com.aivle06.bookservice.repository.BookRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
+@Transactional
 @RequiredArgsConstructor
 public class BookServiceImpl implements BookService{
 
@@ -23,12 +25,14 @@ public class BookServiceImpl implements BookService{
 
     //전체 조회
     @Override
+    @Transactional(readOnly=true)
     public List<Book> getAllBooks(){
         return bookRepository.findAll();
     }
 
     //단건 조회
     @Override
+    @Transactional(readOnly = true)
     public Book getBookById(Long id){
         return bookRepository.findById(id).orElseThrow(()-> new IllegalArgumentException("책이 존재하지 않습니다."));
     }
