@@ -4,6 +4,7 @@ import com.aivle06.bookservice.domain.Book;
 import com.aivle06.bookservice.dto.BookDetailResponseDTO;
 import com.aivle06.bookservice.dto.BookListResponseDTO;
 import com.aivle06.bookservice.dto.BookRequestDTO;
+import com.aivle06.bookservice.dto.common.DataResponse;
 import com.aivle06.bookservice.service.BookService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -27,12 +28,12 @@ public class BookController {
 
     // 전체 목록 조회 (GET /api/books/?page={page_num})
     @GetMapping
-    public ResponseEntity<List<BookListResponseDTO>> getAllBooks(
+    public ResponseEntity<DataResponse<BookListResponseDTO>> getAllBooks(
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size
     ) {
-        List<BookListResponseDTO> books = bookService.getAllBookListResponseWithPaging(page, size);
-        return ResponseEntity.ok(books);
+        DataResponse<BookListResponseDTO> response = new DataResponse<>(bookService.getAllBookListResponseWithPaging(page, size));
+        return ResponseEntity.ok(response);
     }
 
     // 특정 ID로 조회 (GET /api/books/{id})
