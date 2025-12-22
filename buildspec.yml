@@ -5,7 +5,14 @@ phases:
     runtime-versions:
       java: corretto17
     commands:
+      - echo "=== Fixing JAVA_HOME for Gradle ==="
+      - which java
+      - java -version
+      - export JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(which java)")")")"
+      - echo "JAVA_HOME set to: $JAVA_HOME"
+      - ls -ld "$JAVA_HOME"
       - chmod +x ./gradlew
+
   build:
     commands:
       - ./gradlew clean build -x test
