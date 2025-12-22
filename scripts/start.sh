@@ -1,42 +1,31 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-# Ensure user exists
-id -u bookapp >/dev/null 2>&1 || useradd -r -s /sbin/nologin bookapp
+APP_USER="bookapp"
+APP_GROUP="bookapp"
+APP_DIR="/opt/book_repo"
+DEST_JAR="${APP_DIR}/app.jar"
 
-# Ensure systemd unit exists
-if [ ! -f /etc/systemd/system/bookapp.service ]; then
-  cat >/etc/systemd/system/bookapp.service <<'EOF'
-[Unit]
-Description=Book Repo Spring Boot API
-After=network.target
-
-[Service]
-User=bookapp
-WorkingDirectory=/opt/book_repo
-ExecStart=/usr/bin/java -jar /opt/book_repo/app.jar
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-  systemctl daemon-reload
-  systemctl enable bookapp.service
+echo "[start] locating built jar..."
+# Prefer the non-plain boot jar
+JAR_CANDIDATE="$(ls -1t ${APP_DIR}/build/libs/*SNAPSHOT.jar 2>/dev/null | head -n 1 || true)"
+if [[ -z "${JAR_CANDIDATE}" ]]; then
+  # fallback: any jar excluding "plain"
+  JAR_CANDIDATE="$(ls -1t ${APP_DIR}/build/libs/*.jar 2>/dev/null | grep -v 'plain\.jar' | head -n 1 || true)"
 fi
 
-# Find newest jar excluding app.jar
-JAR="$(find /opt/book_repo -type f -name "*.jar" ! -name "app.jar" -printf "%T@ %p\n" 2>/dev/null \
-  | sort -nr | head -n 1 | cut -d' ' -f2- || true)"
-
-if [ -z "$JAR" ]; then
-  echo "Jar not found under /opt/book_repo (excluding app.jar)"
-  ls -R /opt/book_repo | head -n 200
+if [[ -z "${JAR_CANDIDATE}" ]]; then
+  echo "[start] ERROR: no deployable jar found under ${APP_DIR}/build/libs" >&2
+  ls -la "${APP_DIR}" || true
+  ls -la "${APP_DIR}/build/libs" || true
   exit 1
 fi
 
-cp -f "$JAR" /opt/book_repo/app.jar
-chown bookapp:bookapp /opt/book_repo/app.jar
+echo "[start] using: ${JAR_CANDIDATE}"
+cp -f "${JAR_CANDIDATE}" "${DEST_JAR}"
+chown "${APP_USER}:${APP_GROUP}" "${DEST_JAR}"
+chmod 0644 "${DEST_JAR}"
 
+echo "[start] restarting service..."
 systemctl restart bookapp.service
-systemctl status bookapp.service --no-pager -l || true
+systemctl --no-pager -l status bookapp.service

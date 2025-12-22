@@ -1,34 +1,64 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-id -u bookapp >/dev/null 2>&1 || useradd -r -s /sbin/nologin bookapp
+APP_USER="bookapp"
+APP_GROUP="bookapp"
+APP_HOME="/home/bookapp"
+APP_DIR="/opt/book_repo"
+SERVICE_FILE="/etc/systemd/system/bookapp.service"
 
-mkdir -p /opt/book_repo
-chown -R bookapp:bookapp /opt/book_repo || true
-
-if ! command -v java >/dev/null 2>&1; then
-  if command -v dnf >/dev/null 2>&1; then
-    dnf install -y java-17-amazon-corretto-headless
-  else
-    yum install -y java-17-amazon-corretto-headless
-  fi
+echo "[install] creating user/home if needed..."
+if ! id -u "${APP_USER}" >/dev/null 2>&1; then
+  # -m creates home, -d sets it explicitly, -s nologin prevents interactive login
+  useradd -r -m -d "${APP_HOME}" -s /sbin/nologin "${APP_USER}"
 fi
 
-cat >/etc/systemd/system/bookapp.service <<'EOF'
+mkdir -p "${APP_HOME}"
+chown -R "${APP_USER}:${APP_GROUP}" "${APP_HOME}"
+
+echo "[install] ensuring app directory exists..."
+mkdir -p "${APP_DIR}"
+chown -R "${APP_USER}:${APP_GROUP}" "${APP_DIR}"
+
+echo "[install] installing Java 17 (Corretto) + devel tools..."
+if command -v dnf >/dev/null 2>&1; then
+  dnf -y install java-17-amazon-corretto-devel
+elif command -v yum >/dev/null 2>&1; then
+  yum -y install java-17-amazon-corretto-devel
+else
+  echo "No yum/dnf found. Cannot install Java automatically." >&2
+  exit 1
+fi
+
+echo "[install] writing systemd unit..."
+cat > "${SERVICE_FILE}" <<EOF
 [Unit]
 Description=Book Repo Spring Boot API
 After=network.target
 
 [Service]
-User=bookapp
-WorkingDirectory=/opt/book_repo
-ExecStart=/usr/bin/java -jar /opt/book_repo/app.jar
+Type=simple
+User=${APP_USER}
+Group=${APP_GROUP}
+WorkingDirectory=${APP_DIR}
+Environment=HOME=${APP_HOME}
+Environment=SPRING_PROFILES_ACTIVE=default
+ExecStart=/usr/bin/java -jar ${APP_DIR}/app.jar
 Restart=always
 RestartSec=5
+SuccessExitStatus=143
+
+# Give it a little room
+LimitNOFILE=65535
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+chmod 644 "${SERVICE_FILE}"
+
+echo "[install] systemd reload + enable..."
 systemctl daemon-reload
 systemctl enable bookapp.service
+
+echo "[install] done."
